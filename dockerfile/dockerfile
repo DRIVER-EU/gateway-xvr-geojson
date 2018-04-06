@@ -1,0 +1,4 @@
+FROM java:8-jre-alpine
+ADD uber-gateway-edxlem-1.0.5.jar /opt/application/uber-gateway-edxlem-1.0.5.jar
+ADD run.sh /opt/application/run.sh
+CMD ["/bin/sh","/opt/application/run.sh"]
