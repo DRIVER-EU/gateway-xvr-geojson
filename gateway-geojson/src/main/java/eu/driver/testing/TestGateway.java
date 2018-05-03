@@ -20,9 +20,9 @@ public class TestGateway {
 			public void messageReceived(IndexedRecord arg0, IndexedRecord arg1) {
 				System.out.println(arg1);
 			}
-		}, "standard_xvr_geojson");
+		}, "simulation-entity-item-pieter-test");
 		
-		GenericProducer producer = adapter.createProducer("simulation-entity-item");
+		GenericProducer producer = adapter.createProducer("simulation-entity-item-pieter-test");
 		
 		Item.Builder xvrEntityBuilder = Item.newBuilder();
 		
