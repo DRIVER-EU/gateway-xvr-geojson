@@ -208,6 +208,7 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 							entityProperties.setGuid(unit.getGuid());
 							entityProperties.setName(unit.getName());
 							entityProperties.setType(TypeEnum.UNIT);
+							entityProperties.setSubEntities(unit.getSubItems());
 							Object scenLabel = mainItem.getScenarioLabel();
 							if (!(scenLabel instanceof RescueLabel)) {
 								entityProperties.setLabel("UNKNOWN");
@@ -320,6 +321,13 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 							entityProperties.setGuid(groupGuid);
 							entityProperties.setName(mainUnit.getName() + "-group");
 							entityProperties.setType(TypeEnum.UNITGROUP);
+							
+							List<CharSequence> groupMembers = new LinkedList<>();
+							groupMembers.add(mainUnit.getGuid());
+							synchronized(unitConnectionGraph) {
+								groupMembers.addAll(unitConnectionGraph.getDescendantsForUnit(mainUnit.getGuid()));
+							}
+							entityProperties.setSubEntities(groupMembers);
 
 							Object scenLabel = mainItem.getScenarioLabel();
 							if (!(scenLabel instanceof RescueLabel)) {
