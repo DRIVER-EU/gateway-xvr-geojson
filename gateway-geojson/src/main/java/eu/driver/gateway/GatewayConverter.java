@@ -6,7 +6,8 @@ import eu.driver.adapter.constants.TopicConstants;
 import eu.driver.adapter.core.CISAdapter;
 import eu.driver.adapter.core.producer.GenericProducer;
 import eu.driver.adapter.logger.CISLogger;
-import eu.driver.gateway.geojson.XVRItemToGeoJSONConverter;
+import eu.driver.gateway.geojson.XVRItemConverter;
+import eu.driver.gateway.geojson.XVRStationConverter;
 
 public class GatewayConverter {
 	
@@ -21,9 +22,20 @@ public class GatewayConverter {
 	
 	public GatewayConverter() {
 		adapter = CISAdapter.getInstance();
-		GatewayProperties.getInstance().getProperty(GatewayProperties.OUTPUT_TOPIC);
-		GenericProducer producer = adapter.createProducer(GatewayProperties.getInstance().getProperty(GatewayProperties.OUTPUT_TOPIC));
-		XVRItemToGeoJSONConverter xvrToGeoJsonConverter = new XVRItemToGeoJSONConverter(producer);
-		adapter.addCallback(xvrToGeoJsonConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC));
+		
+		addItemConverter();
+		addStationConverter();
+	}
+	
+	private void addItemConverter() {
+		GenericProducer itemProducer = adapter.createProducer(GatewayProperties.getInstance().getProperty(GatewayProperties.OUTPUT_TOPIC_ITEM));
+		XVRItemConverter itemConverter = new XVRItemConverter(itemProducer);
+		adapter.addCallback(itemConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC_ITEM));
+	}
+	
+	private void addStationConverter() {
+		GenericProducer stationProducer = adapter.createProducer(GatewayProperties.getInstance().getProperty(GatewayProperties.OUTPUT_TOPIC_STATION));
+		XVRStationConverter stationConverter = new XVRStationConverter(stationProducer);
+		adapter.addCallback(stationConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC_STATION));
 	}
 }

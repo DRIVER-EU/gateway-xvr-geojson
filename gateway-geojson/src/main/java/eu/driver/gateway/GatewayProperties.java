@@ -18,14 +18,47 @@ public class GatewayProperties extends Properties {
 	private static final long serialVersionUID = -5082046368427979491L;
 
 	/**
-	 * Input topic name
+	 * Input topic name for simulated items
 	 */
-	public static final String INPUT_TOPIC = "input.topic";
-
+	public static final String INPUT_TOPIC_ITEM = "input.topic.item";
+	
 	/**
-	 * Output topic name
+	 * Input topic name for simulated units
 	 */
-	public static final String OUTPUT_TOPIC = "output.topic";
+	public static final String INPUT_TOPIC_UNIT = "input.topic.unit";
+	/**
+	 * Input topic name for simulated unit groups
+	 */
+	public static final String INPUT_TOPIC_UNITGROUP = "input.topic.unitgroup";
+	/**
+	 * Input topic name for simulated stations
+	 */
+	public static final String INPUT_TOPIC_STATION = "input.topic.station";
+	
+	/**
+	 * Input topic name for simulated deletions
+	 */
+	public static final String INPUT_TOPIC_DELETIONS = "input.topic.deletions";
+	
+	/**
+	 * Output topic name for converted items
+	 */
+	public static final String OUTPUT_TOPIC_ITEM = "output.topic.item";
+	
+	/**
+	 * Output topic name for converted units
+	 */
+	public static final String OUTPUT_TOPIC_UNIT = "output.topic.unit";
+	
+	/**
+	 * Output topic name for converted unit groups
+	 */
+	public static final String OUTPUT_TOPIC_UNITGROUP = "output.topic.unitgroup";
+	
+	/**
+	 * Output topic name for converted stations
+	 */
+	public static final String OUTPUT_TOPIC_STATION = "output.topic.station";
 	
 	public static final String OUTPUT_FREQUENCY = "output.frequency";
 	
@@ -61,8 +94,6 @@ public class GatewayProperties extends Properties {
 	}
 
 	private void setDefaults() {
-		setProperty(INPUT_TOPIC, "");
-		setProperty(OUTPUT_TOPIC, "");
 		setProperty(OUTPUT_FREQUENCY, "1000");
 	}
 

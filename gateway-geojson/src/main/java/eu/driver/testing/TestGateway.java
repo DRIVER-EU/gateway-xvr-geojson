@@ -34,7 +34,7 @@ public class TestGateway {
 		xvrEntityBuilder.setVisibleForParticipant(true);
 		xvrEntityBuilder.setMovable(true);
 		Location.Builder xvrEntityLocationBuilder = Location.newBuilder();
-		xvrEntityLocationBuilder.setAltitude(0.0f);
+		xvrEntityLocationBuilder.setAltitude(0.0);
 		
 		double latitude = 52.171f;
 		double longitude = 21.201f;

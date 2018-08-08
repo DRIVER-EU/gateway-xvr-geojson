@@ -15,29 +15,31 @@ import eu.driver.adapter.core.producer.GenericProducer;
 import eu.driver.adapter.logger.CISLogger;
 import eu.driver.api.IAdaptorCallback;
 import eu.driver.gateway.GatewayProperties;
-import eu.driver.model.geojson.Feature;
-import eu.driver.model.geojson.FeatureCollection;
-import eu.driver.model.geojson.Point;
-import eu.driver.model.geojson.PointType;
-import eu.driver.model.geojson.XVRItemProperties;
+import eu.driver.model.geojson.sim.Feature;
+import eu.driver.model.geojson.sim.FeatureCollection;
+import eu.driver.model.geojson.sim.Point;
+import eu.driver.model.geojson.sim.PointType;
+import eu.driver.model.geojson.sim.SimulatedEntityProperties;
+import eu.driver.model.geojson.sim.TypeEnum;
 import eu.driver.model.sim.entity.Item;
 import eu.driver.model.sim.entity.item.EnvironmentLabel;
 import eu.driver.model.sim.entity.item.IncidentLabel;
 import eu.driver.model.sim.entity.item.ObjectType;
 import eu.driver.model.sim.entity.item.PersonType;
 import eu.driver.model.sim.entity.item.RescueLabel;
+import eu.driver.model.sim.entity.item.VehicleSubType;
 import eu.driver.model.sim.entity.item.VehicleType;
 
-public class XVRItemToGeoJSONConverter implements IAdaptorCallback {
+public class XVRItemConverter implements IAdaptorCallback {
 
 	private GenericProducer outputProducer;
 
 	private Map<CharSequence, Item> items;
 	private ScheduledExecutorService reportingScheduler;
 
-	private static Logger logger = CISLogger.logger(XVRItemToGeoJSONConverter.class);
+	private static Logger logger = CISLogger.logger(XVRItemConverter.class);
 
-	public XVRItemToGeoJSONConverter(GenericProducer producer) {
+	public XVRItemConverter(GenericProducer producer) {
 		outputProducer = producer;
 		items = new HashMap<>();
 		reportingScheduler = Executors.newScheduledThreadPool(1);
@@ -50,7 +52,9 @@ public class XVRItemToGeoJSONConverter implements IAdaptorCallback {
 		if (message instanceof Item) {
 			synchronized (items) {
 				Item item = (Item) message;
-				items.put(item.getGuid(), item);
+				if (item.getVisibleForParticipant() && item.getScenarioLabel() instanceof RescueLabel) {
+					items.put(item.getGuid(), item);
+				}
 				if (items.size() >= 100) {
 					reportingScheduler.schedule(new ReportingTask(), 0, TimeUnit.MILLISECONDS);
 				}
@@ -77,18 +81,15 @@ public class XVRItemToGeoJSONConverter implements IAdaptorCallback {
 
 						featureBuilder.setGeometry(new Point(PointType.Point, lonLatAlt));
 
-						XVRItemProperties.Builder xvrItemBuilder = XVRItemProperties.newBuilder();
-						xvrItemBuilder.setGuid(item.getGuid());
-						xvrItemBuilder.setName(item.getName());
-						xvrItemBuilder.setOwner(item.getOwner());
-						xvrItemBuilder.setYaw(item.getOrientation().getYaw());
-						xvrItemBuilder.setPitch(item.getOrientation().getPitch());
-						xvrItemBuilder.setRoll(item.getOrientation().getRoll());
-						xvrItemBuilder.setSpeed(item.getVelocity().getMagnitude());
+						SimulatedEntityProperties.Builder entityProperties = SimulatedEntityProperties.newBuilder();
+						entityProperties.setGuid(item.getGuid());
+						entityProperties.setName(item.getName());
+						entityProperties.setType(getItemType(item));
+						RescueLabel rescueLabel = (RescueLabel) item.getScenarioLabel();
+						entityProperties.setLabel(rescueLabel.getSubLabel().name());
+						entityProperties.setSpeed(item.getVelocity().getMagnitude());
 
-						xvrItemBuilder = setItemType(xvrItemBuilder, item);
-
-						featureBuilder.setProperties(xvrItemBuilder.build());
+						featureBuilder.setProperties(entityProperties.build());
 
 						featureBuilder.build();
 
@@ -104,40 +105,40 @@ public class XVRItemToGeoJSONConverter implements IAdaptorCallback {
 			}
 		}
 
-		private XVRItemProperties.Builder setItemType(XVRItemProperties.Builder properties, Item item) {
+		private TypeEnum getItemType(Item item) {
 			Object type = item.getItemType();
 			if (type instanceof ObjectType) {
-				ObjectType ot = (ObjectType) type;
-				properties.setType(ot.getClass().getSimpleName());
-				properties.setSubType(ot.getSubType().name());
+				return TypeEnum.OBJECT;
 			}
 			if (type instanceof VehicleType) {
 				VehicleType ot = (VehicleType) type;
-				properties.setType(ot.getClass().getSimpleName());
-				properties.setSubType(ot.getSubType().name());
+				VehicleSubType subType = ot.getSubType();
+				if(subType == VehicleSubType.BOAT) {
+					return TypeEnum.BOAT;
+				}
+				if(subType == VehicleSubType.CAR) {
+					return TypeEnum.CAR;
+				}
+				if(subType == VehicleSubType.HELICOPTER) {
+					return TypeEnum.HELICOPTER;
+				}
+				if(subType == VehicleSubType.MOTORCYCLE) {
+					return TypeEnum.MOTORCYCLE;
+				}
+				if(subType == VehicleSubType.PLANE) {
+					return TypeEnum.PLANE;
+				}
+				if(subType == VehicleSubType.TRUCK) {
+					return TypeEnum.TRUCK;
+				}
+				if(subType == VehicleSubType.VAN) {
+					return TypeEnum.VAN;
+				}
 			}
 			if (type instanceof PersonType) {
-				PersonType ot = (PersonType) type;
-				properties.setType(ot.getClass().getSimpleName());
-				properties.setSubType(ot.getGender().name());
+				return TypeEnum.PERSON;
 			}
-			Object label = item.getScenarioLabel();
-			if (label instanceof EnvironmentLabel) {
-				EnvironmentLabel el = (EnvironmentLabel) label;
-				properties.setLabel(el.getClass().getSimpleName());
-				properties.setSubLabel(el.getSubLabel().name());
-			}
-			if (label instanceof IncidentLabel) {
-				IncidentLabel el = (IncidentLabel) label;
-				properties.setLabel(el.getClass().getSimpleName());
-				properties.setSubLabel(el.getSubLabel().name());
-			}
-			if (label instanceof RescueLabel) {
-				RescueLabel el = (RescueLabel) label;
-				properties.setLabel(el.getClass().getSimpleName());
-				properties.setSubLabel(el.getSubLabel().name());
-			}
-			return properties;
+			return TypeEnum.UNKNOWN;
 		}
 	}
 
