@@ -208,7 +208,10 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 							entityProperties.setGuid(unit.getGuid());
 							entityProperties.setName(unit.getName());
 							entityProperties.setType(TypeEnum.UNIT);
-							entityProperties.setSubEntities(unit.getSubItems());
+							List<CharSequence> subEntities = new LinkedList<>();
+							subEntities.add(unit.getGuid());
+							subEntities.addAll(unit.getSubItems());
+							entityProperties.setSubEntities(subEntities);
 							Object scenLabel = mainItem.getScenarioLabel();
 							if (!(scenLabel instanceof RescueLabel)) {
 								entityProperties.setLabel("UNKNOWN");
