@@ -34,9 +34,9 @@ public class GatewayConverter {
 		XVRItemUnitGroupConverter itemConverter = new XVRItemUnitGroupConverter(itemProducer, unitProducer, groupProducer);
 		
 		adapter.addCallback(itemConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC_ITEM));
-		adapter.addCallback(itemConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC_ITEM));
-		adapter.addCallback(itemConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC_ITEM));
-		adapter.addCallback(itemConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC_ITEM));
+		adapter.addCallback(itemConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC_UNIT));
+		adapter.addCallback(itemConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC_UNITGROUP));
+		adapter.addCallback(itemConverter, GatewayProperties.getInstance().getProperty(GatewayProperties.INPUT_TOPIC_DELETIONS));
 	}
 	
 	private void addStationConverter() {
