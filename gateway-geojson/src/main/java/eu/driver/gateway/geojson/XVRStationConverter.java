@@ -91,7 +91,7 @@ public class XVRStationConverter implements IAdaptorCallback {
 					builder.setFeatures(features);
 					FeatureCollection fc = builder.build();
 					outputProducer.send(fc);
-					logger.info("Reported " + features.size() + " XVR Items as GeoJSON Features");
+					logger.info("Reported " + features.size() + " XVR Stations as GeoJSON Features");
 					stations.clear();
 				}
 			}
