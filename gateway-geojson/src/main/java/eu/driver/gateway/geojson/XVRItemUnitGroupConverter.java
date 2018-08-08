@@ -110,6 +110,8 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 			}
 			synchronized (unitConnectionGraph) {
 				UnitConnectionGraph.Unit ucUnit = unitConnectionGraph.getUnit(unit.getGuid());
+				
+				// TODO: move this to the reporting task?
 				if (!ucUnit.hasParent() && ucUnit.hasChildren()) {
 					synchronized (groupUpdates) {
 						groupUpdates.put(unit.getGuid(), unit);
@@ -146,8 +148,10 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 			if (unitConnectionGraph.hasConnection(deletion.getGuid())) {
 				unitConnectionGraph.removeConnection(deletion.getGuid());
 			}
+			
+			// TODO: check parent and child if valid group -> if so report
 		}
-		// entities that are removed should stop being reported
+		// entities that are removed should stop being reported automatically
 	}
 
 	private class UnitConnectionTask implements Runnable {

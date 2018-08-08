@@ -63,6 +63,10 @@ public class UnitConnectionGraph {
 	public boolean hasConnection(CharSequence connectionGuid) {
 		return connectionMap.get(connectionGuid) != null;
 	}
+	
+	public UnitConnection getConnection(CharSequence connectionGuid) {
+		return connectionMap.get(connectionGuid);
+	}
 
 	public void removeConnection(CharSequence connectionGuid) {
 		UnitConnection connection = connectionMap.get(connectionGuid);
