@@ -14,17 +14,18 @@ public class GatewayConverter {
 	
 	private static Logger logger = CISLogger.logger(GatewayConverter.class);
 	
-	public static void main(String[] args) {
-		new GatewayConverter();
-		logger.info("GatewayConverter started!");
-	}
-	
 	public GatewayConverter() {
 		adapter = CISAdapter.getInstance();
 		
 		addItemUnitGroupConverter();
 		addStationConverter();
 	}
+	
+	public static void main(String[] args) {
+		new GatewayConverter();
+		logger.info("GatewayConverter started!");
+	}
+	
 	
 	private void addItemUnitGroupConverter() {
 		GenericProducer itemProducer = adapter.createProducer(GatewayProperties.getInstance().getProperty(GatewayProperties.OUTPUT_TOPIC_ITEM));
