@@ -26,7 +26,6 @@ public class GatewayConverter {
 		logger.info("GatewayConverter started!");
 	}
 	
-	
 	private void addItemUnitGroupConverter() {
 		GenericProducer itemProducer = adapter.createProducer(GatewayProperties.getInstance().getProperty(GatewayProperties.OUTPUT_TOPIC_ITEM));
 		GenericProducer unitProducer = adapter.createProducer(GatewayProperties.getInstance().getProperty(GatewayProperties.OUTPUT_TOPIC_UNIT));

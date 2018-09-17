@@ -53,6 +53,8 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 
 	private ScheduledExecutorService reportingScheduler;
 
+	private final Object groupUpdateLock = new Object();
+
 	private static Logger logger = CISLogger.logger(XVRItemUnitGroupConverter.class);
 
 	public XVRItemUnitGroupConverter(GenericProducer itemProducer, GenericProducer unitProducer,
@@ -63,13 +65,14 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 
 		reportingScheduler = Executors.newScheduledThreadPool(3);
 		long freq = Long.parseLong(GatewayProperties.getInstance().getProperty(GatewayProperties.OUTPUT_FREQUENCY));
-		
+
 		reportingScheduler.scheduleAtFixedRate(new ItemReportingTask(), 0, freq, TimeUnit.MILLISECONDS);
 		reportingScheduler.scheduleAtFixedRate(new UnitReportingTask(), 0, freq, TimeUnit.MILLISECONDS);
 		reportingScheduler.scheduleAtFixedRate(new GroupReportingTask(), 0, freq, TimeUnit.MILLISECONDS);
 		reportingScheduler.scheduleAtFixedRate(new UnitConnectionTask(), 0, freq, TimeUnit.MILLISECONDS);
-		
-		logger.info("Start Converting XVR Items, Units and Groups to GeoJSON every " + freq + " milliseconds (windowed)");
+
+		logger.info(
+				"Start Converting XVR Items, Units and Groups to GeoJSON every " + freq + " milliseconds (windowed)");
 	}
 
 	public void messageReceived(IndexedRecord key, IndexedRecord message) {
@@ -81,6 +84,7 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 		}
 		if (message instanceof UnitConnection) {
 			processUnitConnection((UnitConnection) message);
+			logger.info("Received Unit Connection: " + message);
 		}
 		if (message instanceof ObjectDeleted) {
 			processObjectDeletion((ObjectDeleted) message);
@@ -91,6 +95,7 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 		synchronized (items) {
 			items.put(item.getGuid(), item);
 		}
+
 		synchronized (itemUpdates) {
 			if (item.getVisibleForParticipant() && item.getScenarioLabel() instanceof RescueLabel) {
 				itemUpdates.put(item.getGuid(), item);
@@ -108,13 +113,15 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 			synchronized (unitUpdates) {
 				unitUpdates.put(unit.getGuid(), unit);
 			}
-			synchronized (unitConnectionGraph) {
-				UnitConnectionGraph.Unit ucUnit = unitConnectionGraph.getUnit(unit.getGuid());
-				
-				// TODO: move this to the reporting task?
-				if (!ucUnit.hasParent() && ucUnit.hasChildren()) {
-					synchronized (groupUpdates) {
-						groupUpdates.put(unit.getGuid(), unit);
+			synchronized (groupUpdateLock) {
+				synchronized (unitConnectionGraph) {
+					UnitConnectionGraph.Unit ucUnit = unitConnectionGraph.getUnit(unit.getGuid());
+
+					// TODO: move this to the reporting task?
+					if (!ucUnit.hasParent() && ucUnit.hasChildren()) {
+						synchronized (groupUpdates) {
+							groupUpdates.put(unit.getGuid(), unit);
+						}
 					}
 				}
 			}
@@ -122,7 +129,7 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 	}
 
 	private void processUnit(Unit unit) {
-		synchronized(units) {
+		synchronized (units) {
 			units.put(unit.getGuid(), unit);
 		}
 		synchronized (unitMainItemMap) {
@@ -148,7 +155,7 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 			if (unitConnectionGraph.hasConnection(deletion.getGuid())) {
 				unitConnectionGraph.removeConnection(deletion.getGuid());
 			}
-			
+
 			// TODO: check parent and child if valid group -> if so report
 		}
 		// entities that are removed should stop being reported automatically
@@ -162,22 +169,24 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 				while (connectionUpdates.size() > 0) {
 					UnitConnection connection = connectionUpdates.poll();
 					// attempt to create connection
-					synchronized (unitConnectionGraph) {
-						if (unitConnectionGraph.hasUnit(connection.getMainUnit())
-								&& unitConnectionGraph.hasUnit(connection.getSubUnit())) {
-							unitConnectionGraph.addConnection(connection.getGuid(), connection.getMainUnit(),
-									connection.getSubUnit());
+					synchronized (groupUpdateLock) {
+						synchronized (unitConnectionGraph) {
+							if (unitConnectionGraph.hasUnit(connection.getMainUnit())
+									&& unitConnectionGraph.hasUnit(connection.getSubUnit())) {
+								unitConnectionGraph.addConnection(connection.getGuid(), connection.getMainUnit(),
+										connection.getSubUnit());
 
-							UnitConnectionGraph.Unit ucUnit = unitConnectionGraph.getUnit(connection.getMainUnit());
-							if (!ucUnit.hasParent() && ucUnit.hasChildren()) {
-								synchronized (groupUpdates) {
-									groupUpdates.put(connection.getMainUnit(), units.get(connection.getMainUnit()));
+								UnitConnectionGraph.Unit ucUnit = unitConnectionGraph.getUnit(connection.getMainUnit());
+								if (!ucUnit.hasParent() && ucUnit.hasChildren()) {
+									synchronized (groupUpdates) {
+										groupUpdates.put(connection.getMainUnit(), units.get(connection.getMainUnit()));
+									}
 								}
+							} else {
+								failedUpdates.add(connection); // if unable, add to failed updates
+								logger.info("Unable to create connection: " + connection.getGuid()
+										+ " because parent or child unit not known. Trying again later!");
 							}
-						} else {
-							failedUpdates.add(connection); // if unable, add to failed updates
-							logger.info("Unable to create connection: " + connection.getGuid()
-									+ " because parent or child unit not known. Trying again later!");
 						}
 					}
 				}
@@ -199,7 +208,10 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 
 						Feature.Builder featureBuilder = Feature.newBuilder();
 
-						Item mainItem = items.get(unit.getMainItem());
+						Item mainItem = null;
+						synchronized (items) {
+							mainItem = items.get(unit.getMainItem());
+						}
 						if (mainItem != null) {
 							List<Double> lonLatAlt = new ArrayList<>(3);
 							lonLatAlt.add(mainItem.getLocation().getLongitude());
@@ -212,10 +224,13 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 							entityProperties.setGuid(unit.getGuid());
 							entityProperties.setName(unit.getName());
 							entityProperties.setType(TypeEnum.UNIT);
+							
+							// set main item guid first, then the sub entities
 							List<CharSequence> subEntities = new LinkedList<>();
-							subEntities.add(unit.getGuid());
+							subEntities.add(mainItem.getGuid());
 							subEntities.addAll(unit.getSubItems());
 							entityProperties.setSubEntities(subEntities);
+							
 							Object scenLabel = mainItem.getScenarioLabel();
 							if (!(scenLabel instanceof RescueLabel)) {
 								entityProperties.setLabel("UNKNOWN");
@@ -233,7 +248,7 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 							features.add(featureBuilder.build());
 						} else {
 							logger.info("Unable to report Unit: " + unit.getGuid()
-									+ " because main unit not known. Trying again later!");
+									+ " because main item not known. Trying again later!");
 							failedUpdates.add(unit);
 						}
 					}
@@ -299,71 +314,74 @@ public class XVRItemUnitGroupConverter implements IAdaptorCallback {
 		@Override
 		public void run() {
 			List<Unit> failedUpdates = new LinkedList<>();
-			synchronized (groupUpdates) {
-				if (groupUpdates.size() > 0) {
-					FeatureCollection.Builder builder = FeatureCollection.newBuilder();
-					List<Feature> features = new ArrayList<>();
+			synchronized (groupUpdateLock) {
+				synchronized (groupUpdates) {
+					if (groupUpdates.size() > 0) {
+						FeatureCollection.Builder builder = FeatureCollection.newBuilder();
+						List<Feature> features = new ArrayList<>();
 
-					for (Unit mainUnit : groupUpdates.values()) {
+						for (Unit mainUnit : groupUpdates.values()) {
 
-						Feature.Builder featureBuilder = Feature.newBuilder();
+							Feature.Builder featureBuilder = Feature.newBuilder();
 
-						Item mainItem = items.get(mainUnit.getMainItem());
-						if (mainItem != null) {
-							List<Double> lonLatAlt = new ArrayList<>(3);
-							lonLatAlt.add(mainItem.getLocation().getLongitude());
-							lonLatAlt.add(mainItem.getLocation().getLatitude());
-							lonLatAlt.add(mainItem.getLocation().getAltitude());
+							Item mainItem = items.get(mainUnit.getMainItem());
+							if (mainItem != null) {
+								List<Double> lonLatAlt = new ArrayList<>(3);
+								lonLatAlt.add(mainItem.getLocation().getLongitude());
+								lonLatAlt.add(mainItem.getLocation().getLatitude());
+								lonLatAlt.add(mainItem.getLocation().getAltitude());
 
-							featureBuilder.setGeometry(new Point(PointType.Point, lonLatAlt));
+								featureBuilder.setGeometry(new Point(PointType.Point, lonLatAlt));
 
-							SimulatedEntityProperties.Builder entityProperties = SimulatedEntityProperties.newBuilder();
+								SimulatedEntityProperties.Builder entityProperties = SimulatedEntityProperties
+										.newBuilder();
 
-							CharSequence groupGuid = groupGuids.get(mainUnit.getGuid());
-							if (groupGuid == null) {
-								groupGuid = java.util.UUID.randomUUID().toString();
-								groupGuids.put(mainUnit.getGuid(), groupGuid);
-							}
+								CharSequence groupGuid = groupGuids.get(mainUnit.getGuid());
+								if (groupGuid == null) {
+									groupGuid = java.util.UUID.randomUUID().toString();
+									groupGuids.put(mainUnit.getGuid(), groupGuid);
+								}
 
-							entityProperties.setGuid(groupGuid);
-							entityProperties.setName(mainUnit.getName() + "-group");
-							entityProperties.setType(TypeEnum.UNITGROUP);
-							
-							List<CharSequence> groupMembers = new LinkedList<>();
-							groupMembers.add(mainUnit.getGuid());
-							synchronized(unitConnectionGraph) {
-								groupMembers.addAll(unitConnectionGraph.getDescendantsForUnit(mainUnit.getGuid()));
-							}
-							entityProperties.setSubEntities(groupMembers);
+								entityProperties.setGuid(groupGuid);
+								entityProperties.setName(mainUnit.getName() + "-group");
+								entityProperties.setType(TypeEnum.UNITGROUP);
 
-							Object scenLabel = mainItem.getScenarioLabel();
-							if (!(scenLabel instanceof RescueLabel)) {
-								entityProperties.setLabel("UNKNOWN");
-								logger.warn(
-										"Main Item of the Group with guid " + groupGuid + " is not of type Rescue!");
+								List<CharSequence> groupMembers = new LinkedList<>();
+								groupMembers.add(mainUnit.getGuid());
+								synchronized (unitConnectionGraph) {
+									groupMembers.addAll(unitConnectionGraph.getDescendantsForUnit(mainUnit.getGuid()));
+								}
+								entityProperties.setSubEntities(groupMembers);
+
+								Object scenLabel = mainItem.getScenarioLabel();
+								if (!(scenLabel instanceof RescueLabel)) {
+									entityProperties.setLabel("UNKNOWN");
+									logger.warn("Main Item of the Group with guid " + groupGuid
+											+ " is not of type Rescue!");
+								} else {
+									RescueLabel rescueLabel = (RescueLabel) scenLabel;
+									entityProperties.setLabel(rescueLabel.getSubLabel().name());
+								}
+
+								featureBuilder.setProperties(entityProperties.build());
+
+								featureBuilder.build();
+
+								features.add(featureBuilder.build());
 							} else {
-								RescueLabel rescueLabel = (RescueLabel) scenLabel;
-								entityProperties.setLabel(rescueLabel.getSubLabel().name());
+								logger.info("Unable to report Group because main unit not known. Trying again later!");
+								failedUpdates.add(mainUnit);
 							}
-
-							featureBuilder.setProperties(entityProperties.build());
-
-							featureBuilder.build();
-
-							features.add(featureBuilder.build());
-						} else {
-							logger.info("Unable to report Group because main unit not known. Trying again later!");
-							failedUpdates.add(mainUnit);
 						}
-					}
 
-					builder.setFeatures(features);
-					FeatureCollection fc = builder.build();
-					groupProducer.send(fc);
-					logger.info("Reported " + features.size() + " XVR Unit Groups as GeoJSON Features");
-					groupUpdates.clear();
-					for (Unit u : failedUpdates) {
-						groupUpdates.put(u.getGuid(), u);
+						builder.setFeatures(features);
+						FeatureCollection fc = builder.build();
+						groupProducer.send(fc);
+						logger.info("Reported " + features.size() + " XVR Unit Groups as GeoJSON Features");
+						groupUpdates.clear();
+						for (Unit u : failedUpdates) {
+							groupUpdates.put(u.getGuid(), u);
+						}
 					}
 				}
 			}
